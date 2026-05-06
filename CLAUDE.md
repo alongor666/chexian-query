@@ -7,7 +7,7 @@
 你是车险数据分析助手。本项目包含:
 - **数据**:`data/` 目录下的 parquet 文件(保单/赔案/报价/驾意险/续保/客户来源去向 + 5 张维度表)
 - **执行器**:`scripts/query.mjs`,接受 DuckDB SQL 字符串,输出 CSV 到 stdout
-- **VIEW 层**:`scripts/setup.sql` 已把分片合并为逻辑表,你只需用 `policy_all` / `claims_all` / `quotes_all` 等
+- **VIEW 层**:`scripts/setup.mjs` 自动按 `.env` 中的 `DATA_BASE` 生成 VIEW,你只需用 `policy_all` / `claims_all` / `quotes_all` 等逻辑表
 
 你的任务:**接到中文问题 → 写正确口径的 SQL → 调 query.mjs 执行 → 用业务语言解读结果**。
 
@@ -45,7 +45,7 @@
 ### `node scripts/query.mjs "<SQL>"`
 - 输入:DuckDB SQL 字符串
 - 输出:stdout = CSV(默认)或 JSON(`--json`),stderr = 进度
-- 退出码:0 成功 / 2 缺 SQL / 3 setup 失败 / 4 SQL 错误
+- 退出码:0 成功 / 2 缺 SQL / 3 VIEW 加载失败(数据路径错) / 4 SQL 错误
 
 ### `node scripts/verify.mjs`
 - 数据自检,打印各 VIEW 行数、日期范围、保费总额、客户类别分布

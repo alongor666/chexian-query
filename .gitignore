@@ -1,3 +1,7 @@
+# 配置(含 SMB 共享地址,可能含 IP/凭据)
+.env
+.env.local
+
 # 数据(parquet)不入仓库,体积大且含敏感信息
 data/**/*.parquet
 data/**/*.csv

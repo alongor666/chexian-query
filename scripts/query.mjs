@@ -11,19 +11,19 @@
  *   stdout — 查询结果(默认 CSV,可选 JSON)
  *   stderr — 进度/错误信息
  *
- * AI 调用示例:
- *   node scripts/query.mjs "SELECT org_level_3, SUM(premium) AS premium FROM policy_all WHERE policy_date >= '2025-01-01' GROUP BY 1 ORDER BY 2 DESC"
+ * 数据根目录由 .env 中的 DATA_BASE 控制(默认 ./data)。
+ * 详见 scripts/setup.mjs 顶部说明。
  */
 
 import duckdb from 'duckdb';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve, join } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { loadDotenv, buildSetupSQL, resolveDataBase } from './setup.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PROJECT_ROOT = resolve(__dirname, '..');
-const SETUP_SQL_PATH = join(__dirname, 'setup.sql');
 
 function logErr(msg) {
   process.stderr.write(`[query] ${msg}\n`);
@@ -65,11 +65,7 @@ chexian-query — DuckDB SQL 执行器
   cross_sell_all   驾意险交叉销售
   renewal_all      续保跟踪
   customer_flow_all 客户来源去向
-  dim_salesman     业务员维度
-  dim_plan         计划维度
-  dim_brand        品牌维度
-  dim_repair       维修资源维度
-  dim_plate_region 车牌归属地维度
+  dim_salesman / dim_plan / dim_brand / dim_repair / dim_plate_region
 
 业务口径必读: docs/business-rules.md
 `);
@@ -126,17 +122,18 @@ async function main() {
     sql = `SELECT * FROM (\n${sql}\n) _q LIMIT ${args.limit}`;
   }
 
+  loadDotenv(PROJECT_ROOT);
+  const dataBase = resolveDataBase(PROJECT_ROOT);
   process.chdir(PROJECT_ROOT);
 
   const db = new duckdb.Database(':memory:');
   const conn = db.connect();
 
   try {
-    const setupSQL = readFileSync(SETUP_SQL_PATH, 'utf-8');
-    await exec(conn, setupSQL);
+    await exec(conn, buildSetupSQL(dataBase));
   } catch (e) {
-    logErr(`setup.sql 加载失败: ${e.message}`);
-    logErr(`提示:确认 data/ 目录结构(参考 data/README.md)`);
+    logErr(`VIEW 加载失败 (DATA_BASE=${dataBase}): ${e.message}`);
+    logErr(`提示:确认数据目录存在,或在 .env 中设置 DATA_BASE 指向正确路径`);
     process.exit(3);
   }
 

@@ -25,7 +25,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync, cpSync, copyFileSync, statSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, cpSync, copyFileSync, statSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { platform } from 'node:os';
@@ -135,15 +135,12 @@ log(`[package] [3/5] 已应用同事专用模板(.env / update.bat / README.md)`
 mkdirSync(resolve(stage, 'logs'), { recursive: true });
 mkdirSync(resolve(stage, 'data'), { recursive: true }); // 占位,DATA_BASE 实际指向 SMB
 
-// 写一个 VERSION 文件
-import('node:fs').then(({ writeFileSync }) => {
-  writeFileSync(
-    resolve(stage, 'VERSION.txt'),
-    `chexian-query ${version}\n打包时间: ${today.toISOString()}\n打包机: ${process.env.COMPUTERNAME || 'unknown'}\n`,
-    'utf-8',
-  );
-});
-
+// 写 VERSION 文件(必须同步,否则会在 zip / cleanup 后才执行)
+writeFileSync(
+  resolve(stage, 'VERSION.txt'),
+  `chexian-query ${version}\n打包时间: ${today.toISOString()}\n打包机: ${process.env.COMPUTERNAME || 'unknown'}\n`,
+  'utf-8',
+);
 log(`[package] [4/5] 已写 VERSION.txt`);
 
 // ===== 7. 压缩 =====

@@ -1,0 +1,23 @@
+# 数据(parquet)不入仓库,体积大且含敏感信息
+data/**/*.parquet
+data/**/*.csv
+data/**/*.xlsx
+
+# Node
+node_modules/
+npm-debug.log*
+package-lock.json
+
+# DuckDB 临时
+*.duckdb
+*.duckdb.wal
+*.tmp
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+.trae/

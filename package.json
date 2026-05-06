@@ -1,0 +1,17 @@
+{
+  "name": "chexian-query",
+  "version": "1.0.0",
+  "description": "车险数据自然语言查询工作区(供 TRAE + GLM-5.1 使用)",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "query": "node scripts/query.mjs",
+    "verify": "node scripts/verify.mjs"
+  },
+  "dependencies": {
+    "duckdb": "^1.1.3"
+  }
+}

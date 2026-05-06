@@ -16,9 +16,10 @@
  */
 
 import duckdb from 'duckdb';
-import { readFileSync } from 'node:fs';
+import { readFileSync, appendFileSync, mkdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import os from 'node:os';
 import { loadDotenv, buildSetupSQL, resolveDataBase } from './setup.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -27,6 +28,30 @@ const PROJECT_ROOT = resolve(__dirname, '..');
 
 function logErr(msg) {
   process.stderr.write(`[query] ${msg}\n`);
+}
+
+function isoLocal(d = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const off = -d.getTimezoneOffset();
+  const sign = off >= 0 ? '+' : '-';
+  const oh = pad(Math.floor(Math.abs(off) / 60));
+  const om = pad(Math.abs(off) % 60);
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.` +
+    `${String(d.getMilliseconds()).padStart(3, '0')}${sign}${oh}:${om}`
+  );
+}
+
+function writeAudit(entry) {
+  try {
+    const logDir = resolve(PROJECT_ROOT, 'logs');
+    if (!existsSync(logDir)) mkdirSync(logDir, { recursive: true });
+    const ym = entry.ts.slice(0, 7).replace('-', '');
+    appendFileSync(resolve(logDir, `query-${ym}.log`), JSON.stringify(entry) + '\n', 'utf-8');
+  } catch {
+    // 审计日志写失败不影响主流程
+  }
 }
 
 function parseArgs(argv) {
@@ -138,14 +163,31 @@ async function main() {
   }
 
   const t0 = Date.now();
+  const ts = isoLocal();
   let rows;
+  let errMsg = null;
   try {
     rows = await exec(conn, sql);
   } catch (e) {
-    logErr(`SQL 执行失败: ${e.message}`);
-    process.exit(4);
+    errMsg = e.message;
   }
   const ms = Date.now() - t0;
+
+  writeAudit({
+    ts,
+    user: process.env.USERNAME || process.env.USER || 'unknown',
+    host: os.hostname(),
+    sql: sql.replace(/\s+/g, ' ').trim().slice(0, 2000),
+    rows: rows ? rows.length : 0,
+    ms,
+    status: errMsg ? 'FAIL' : 'OK',
+    error: errMsg ? errMsg.slice(0, 500) : null,
+  });
+
+  if (errMsg) {
+    logErr(`SQL 执行失败: ${errMsg}`);
+    process.exit(4);
+  }
   logErr(`查询完成: ${rows.length} 行, ${ms} ms`);
 
   const out = args.format === 'json' ? toJSON(rows) : toCSV(rows);

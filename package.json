@@ -5,11 +5,13 @@
   "type": "module",
   "private": true,
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "query": "node scripts/query.mjs",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "sync": "node scripts/sync-https.mjs",
+    "package": "node scripts/package-for-colleagues.mjs"
   },
   "dependencies": {
     "duckdb": "^1.1.3"

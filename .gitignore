@@ -1,6 +1,8 @@
 # 配置(含 SMB 共享地址,可能含 IP/凭据)
 .env
 .env.local
+# 但 dist-template/.env 是给同事的预设模板(无凭据),要入库
+!dist-template/.env
 
 # 数据(parquet)不入仓库,体积大且含敏感信息
 data/**/*.parquet
@@ -25,3 +27,11 @@ Thumbs.db
 .vscode/
 .idea/
 .trae/
+
+# Claude Code 本机设置(skills/commands 等共享项仍入库)
+.claude/settings.local.json
+
+# 打包输出 / 审计日志(本机产物)
+dist/
+logs/
+.staging-package/

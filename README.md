@@ -1,233 +1,117 @@
 # chexian-query — 车险数据自然语言查询工作区
 
-> 给非技术同事使用 TRAE(AI IDE)+ GLM-5.1 直接做车险数据分析的工作区。
-> 你只需要说中文,GLM-5.1 自动写 SQL、跑 DuckDB、给业务结论。
+> 同事用 TRAE + GLM-5.1 直接说中文查车险数据,GLM 自动写 DuckDB SQL,出业务结论。
 
 ---
 
-## 你需要做的(四步)
+## 三种角色的入口
 
-### 第 1 步:装 Node.js(一次性,5 分钟)
-
-打开 PowerShell:
-```powershell
-# 方式 A:用 winget(Win10/11 自带)
-winget install OpenJS.NodeJS.LTS
-
-# 方式 B:官网下载安装包
-# 访问 https://nodejs.org/zh-cn/download → 下载 LTS Windows 安装包(.msi) → 双击安装
-```
-
-验证:
-```powershell
-node --version
-# 应输出 v20.x.x 或更高
-```
-
-### 第 2 步:克隆代码(一次性)
-
-```powershell
-git clone https://github.com/alongor666/chexian-query.git
-cd chexian-query
-npm install
-```
-
-> ⚠️ 装 `duckdb` 需要 C++ 编译器。如果 `npm install` 报 "MSBuild.exe failed":
-> 装 [Visual Studio Build Tools](https://visualstudio.microsoft.com/zh-hans/visual-cpp-build-tools/) →
-> 勾选 "C++ 桌面开发" 工作负载 → 重启 PowerShell 重试。
-
-### 第 3 步:配置数据共享路径(一次性,1 分钟)
-
-数据由**数据负责人**统一维护,放在内网 Windows 共享 `\\10.120.0.87\chexian-query\data`。
-你不需要下载数据,只需要让本项目知道共享路径。
-
-```powershell
-# 1) 复制配置模板
-copy .env.example .env
-
-# 2) 用记事本打开 .env,把这一行取消注释:
-#    DATA_BASE=//10.120.0.87/chexian-query/data
-#
-# (注意用双正斜杠,跨平台兼容)
-```
-
-> 💡 第一次访问 `\\10.120.0.87\chexian-query` 时,Windows 会要求输入凭据。
-> 找数据负责人要用户名/密码,勾选"记住凭据"即可。
-
-### 第 4 步:跑自检确认数据可达
-
-```powershell
-node scripts/verify.mjs
-```
-
-期望输出:11 个 VIEW 都有行数 + 客户类别 11 类 + 保费亿级,即成功。
-如果报"VIEW 加载失败",检查:
-- `\\10.120.0.87` 在 Windows 资源管理器中能否打开
-- `.env` 中的 `DATA_BASE` 写法是否正确
-
----
-
-## 怎么用(每次提问)
-
-### 用 TRAE 打开本项目
-1. 启动 TRAE,选"打开文件夹",指向 chexian-query 目录
-2. TRAE 自动加载 `AGENTS.md` 和 `CLAUDE.md`(GLM-5.1 的行为指南)
-3. 在 GLM-5.1 配置里,确保 API Key 已填(自付)
-
-### 直接说中文
-```
-> 帮我看 2025 年 1 月各三级机构的剔摩满期赔付率,从高到低排
-```
-
-GLM-5.1 会:
-1. 读 `docs/business-rules.md` 找口径
-2. 写 SQL → 跑 `node scripts/query.mjs "<SQL>"`
-3. 给你**业务结论 + 数据表 + 折叠 SQL**(详见 AGENTS.md 第七节)
-
----
-
-## 代码 / 数据更新
-
-### 代码更新(指标定义、业务规则、AI 指南)
-```powershell
-cd chexian-query
-git pull
-```
-
-代码每次更新都会同步到所有同事。如果有 `npm install` 提示,运行一次。
-
-### 数据更新(每天 / 每周一次,由数据负责人推送)
-**你什么都不用做**。数据负责人把最新数据同步到 `\\10.120.0.87\chexian-query\data` 后,
-你下次跑查询时直接看到的就是最新数据。
-
-如果想知道当前数据时效:
-```powershell
-node scripts/verify.mjs
-```
-
-最后一栏的"签单日期"就是数据截至日期。
-
----
-
-## 故障排查
-
-| 现象 | 解决方法 |
+| 你是谁 | 看哪里 |
 |---|---|
-| `npm install` 报 "MSBuild.exe failed" | 装 VS Build Tools(见第 2 步备注) |
-| `verify.mjs` 报 "VIEW 加载失败" | 在 Windows 资源管理器试着打开 `\\10.120.0.87\chexian-query`,确认能进 |
-| `\\10.120.0.87` 提示找不到 | 你不在公司内网。VPN 连上后再试 |
-| 提示输入用户名/密码 | 找数据负责人要凭据,勾选"记住凭据" |
-| GLM-5.1 写的 SQL 报 "syntax error" | 把 stderr 错误整段贴回 GLM,让它读 `docs/duckdb-cheatsheet.md` 后重写 |
-| GLM-5.1 输出指标不对 | 让它读 `docs/business-rules.md` 第 N 条铁律后重新计算 |
+| 业务同事(查数据) | 找数据负责人要 `chexian-query-YYYYMMDD-XXXXXXX.zip`,解压到 `D:\chexian-query`,按里面的 `README.md` 5 步走 |
+| IT(给同事配电脑) | [docs/IT-onboarding.md](docs/IT-onboarding.md) |
+| **数据负责人 / 项目维护者** | 继续往下看 |
 
 ---
 
-## 我能问什么样的问题?
+## 数据负责人专属
 
-参考 `docs/examples/` 5 个样板:
+> 只有你一个人需要做这些事。同事和 IT 不看这一段。
 
-| 例 | 问题 |
-|---|---|
-| [01](docs/examples/01_满期赔付率_机构维度.md) | 各机构满期赔付率 |
-| [02](docs/examples/02_出险率年化_客户类别.md) | 各客户类别出险率(年化) |
-| [03](docs/examples/03_NCD档位_实际vs满期赔付率.md) | NCD 档位 × 满期赔付率(定价有效性) |
-| [04](docs/examples/04_业务员标保排名_Top30.md) | 业务员 Top30 排名 + 同比 |
-| [05](docs/examples/05_续保率_交商同保口径.md) | 各机构续保率(交商同保口径) |
+### 1. 整体架构
 
-更复杂的也行:
-- "把营业货车按吨位分段,看赔付率和保费规模,哪段在亏"
-- "今年 12 月驾意险渗透率,按机构看,哪些机构主全保单没卖驾意"
-- "客户来源去向:哪些客户从平安/人保转入了我司,主要在什么客户类别"
-
----
-
-## 重要:数据保密
-
-共享路径的数据**未脱敏**,含车架号、车牌号、被保险人性别等敏感字段。
-
-- ❌ 不要把查询结果(如客户清单)截图发到非工作群
-- ❌ 不要把数据导出到本机后再传给项目外的人
-- ✅ 业务结论(如"赔付率 65%")可正常分享
-
----
-
-## 数据负责人专属(同事可跳过)
-
-> 你是负责把 VPS 数据同步到内网共享盘的角色。本节不是同事看的。
-
-### 网络拓扑
 ```
-Mac(你)  ─ ssh push ─▶  VPS  ─ HTTPS pull ─▶  Win 中转机  ─ SMB ─▶  同事 N 人
-                       chexian.cretvalu.com    10.120.0.87
-                       /data/(Basic Auth)     \\10.120.0.87\chexian-query\data
+Mac(你)─ ssh push ─▶ VPS ─ HTTPS pull ─▶ Win 中转机 ─ SMB ─▶ 同事 N 人
+                  chexian.cretvalu.com    10.120.0.87
+                  /data/(Basic Auth)     \\10.120.0.87\chexian-query\
+                                          ├ data\(同事查询走这里)
+                                          └ release\(同事拿新版 zip 走这里)
 ```
 
-> ⚠️ 为什么 Win → VPS 走 HTTPS 而不是 SSH:公司网络封外部 SSH 出站,V2RayN 这类商业代理只透传 HTTP/HTTPS,SSH 协议无法通过。HTTPS + nginx Basic Auth 是这种环境下的唯一可行方案。详见 [CLAUDE.md 第十章](CLAUDE.md)。
+3 段同步:
+- **Mac → VPS**:你日常 ETL 后,用 chexian-api 的 `scripts/sync-vps.mjs` 推
+- **VPS → Win 中转机**:`node scripts/sync-https.mjs`(本项目,见下)
+- **Win → 同事**:打成 zip,放共享盘,同事自己拷(本项目 `node scripts/package-for-colleagues.mjs`)
 
-### 一次性 VPS 端配置(VNC 控制台 root 跑一次)
+### 2. 一次性 VPS 端配置
 
+VNC 控制台 root 跑一次:
 ```bash
 curl -sL https://gh-proxy.com/https://raw.githubusercontent.com/alongor666/chexian-query/main/scripts/setup-https-share.sh | bash
 ```
 
-会输出账号、密码,以及 Win 端 `.env` 要填的 3 行。密码也存在 VPS 的 `/root/.chexian-data-password`。
+输出包含 username/password,以及 Win 端 `.env` 要填的 3 行。详见 [CLAUDE.md §10](CLAUDE.md)。
 
-脚本做的事:
-- 给 nginx 加一个 `/data/` location(指向 `/var/www/chexian/server/data/`)
-- 用 `openssl` 生成 Basic Auth 凭据,写入 `/etc/nginx/.chexian-data-htpasswd`
-- 备份原 nginx 配置到 `/etc/nginx/conf.d/chexian.conf.bak.<时间戳>` 后 reload
+### 3. 一次性 Win 中转机配置
 
-### 一次性 Win 中转机配置
+1. 装 Node.js 22 LTS:`winget install OpenJS.NodeJS.LTS`(或国内镜像 https://npmmirror.com/mirrors/node/latest-v22.x/)
+2. `git clone https://github.com/alongor666/chexian-query.git`(V2RayN 需要 GLOBAL 模式或加 GitHub 到代理白名单)
+3. `cd chexian-query && npm install`
+4. 在共享盘机器上创建 `D:\chexian-share\data` 和 `D:\chexian-share\release`,共享给"Everyone(只读)"
+5. 复制 `.env.example` 为 `.env`,填:
+   ```
+   DATA_BASE=D:/chexian-share/data
+   HTTPS_BASE_URL=https://chexian.cretvalu.com/data/
+   HTTPS_USER=chexian-data
+   HTTPS_PASS=<setup-https-share.sh 输出的密码>
+   ```
+6. **V2RayN 路由**:让 `chexian.cretvalu.com` 走代理(GLOBAL 模式,或自定义代理白名单)。否则会因为是大陆 IP 走直连,被公司防火墙切。
 
-1. 装 Node.js 22+:`winget install OpenJS.NodeJS.LTS`
-2. `git clone https://github.com/alongor666/chexian-query.git && cd chexian-query && npm install`
-3. 创建本地共享文件夹(如 `D:\chexian-share\data`),右键 → 共享 → 共享给"Everyone(只读)"
-4. 复制 `.env.example` 为 `.env`,填上 VPS 端脚本输出的 3 个 HTTPS_* 变量,以及 `DATA_BASE=D:/chexian-share/data`
-5. **V2RayN 必须配置**:让 `chexian.cretvalu.com` 走代理(GLOBAL 模式或自定义代理白名单),否则会因为是大陆 IP 走直连而被公司防火墙切断
+### 4. 日常 — 同步数据(每天/每周)
 
-### 日常同步(每天/每周一次)
 ```powershell
-cd chexian-query
+cd D:\chexian-query
 node scripts/sync-https.mjs
 ```
 
-输出示例:
+输出:
 ```
 [sync] 远端: 20 个文件,合计 192.1 MB
 [sync] 待下载: 3 个,12.4 MB
-[1/3] policy/current/01_签单清单_增量_20260505.parquet  12.0 MB  NEW ... OK
-[2/3] claims/claims_2026.parquet                       320 KB    UPDATE ... OK
-[3/3] dim/salesman/latest.parquet                       28 KB    UPDATE ... OK
-[sync] ✅ 3 成功 / 0 失败,用时 8.2s
+[1/3] policy/current/01_签单清单_增量_20260520.parquet  12.0 MB  NEW ... OK
+[sync] ✅ 3 成功 / 0 失败
 ```
 
-### 进阶:开机自动同步(可选)
+### 5. 日常 — 给同事打新版包
 
-Windows Task Scheduler 加一个任务,每天 8:00 自动跑:
-```
-程序: C:\Program Files\nodejs\node.exe
-参数: scripts/sync-https.mjs
-起始位置: D:\chexian-query\chexian-query
+代码改了之后(改了业务规则、加了新 docs、改了 AGENTS.md 等),给同事发新版:
+
+```powershell
+cd D:\chexian-query
+git pull                                  # 拉最新代码
+npm install                               # 如有依赖变化
+node scripts/package-for-colleagues.mjs   # 打包,默认输出到 dist/
 ```
 
-### 常用命令
+输出 `dist/chexian-query-YYYYMMDD-XXXXXXX.zip`,大概 80-150 MB。
+
+然后:
+1. 把 zip 拷到 `\\10.120.0.87\chexian-query\release\`(直接拷,SMB 已挂载)
+2. 群里通知:"新版 chexian-query-20260520-abc1234,下载到 D:\ 后双击 D:\chexian-query\update.bat"
+
+> ⚠️ **必须在 Win 中转机上打包**,不能在 Mac 上打。duckdb 是平台相关 native binary,Mac 打的包给 Win 同事会报"找不到 duckdb_node.node"。
+
+### 6. 常用命令速查
 
 | 命令 | 用途 |
 |---|---|
-| `node scripts/sync-https.mjs --check` | 仅测试 HTTPS 连通(账号/密码/代理是否正常) |
+| `node scripts/sync-https.mjs --check` | 仅测试 HTTPS 连通(账号/密码/V2RayN 是否正常) |
 | `node scripts/sync-https.mjs --dry-run` | 看待下载清单,不实际下载 |
-| `node scripts/sync-https.mjs` | 增量同步(只下载新/大小变了的) |
-| `node scripts/sync-https.mjs --full` | 全量重下(忽略本地已有) |
-| `node scripts/verify.mjs` | 验证本地 / 共享盘数据可读 |
+| `node scripts/sync-https.mjs` | 增量同步 |
+| `node scripts/sync-https.mjs --full` | 全量重下 |
+| `node scripts/verify.mjs` | 验证本地数据可读、看签单日期 max |
+| `node scripts/query.mjs "<SQL>"` | 跑 SQL(自动写审计日志到 `logs/query-YYYYMM.log`) |
+| `node scripts/package-for-colleagues.mjs` | 打 zip 给同事 |
+| `node scripts/package-for-colleagues.mjs --out D:/chexian-share/release` | 打完直接放共享盘 |
 
-### 换密码 / 重新生成
+### 7. 换 HTTPS 密码
 
 ```bash
-# VNC root 上跑:
+# VNC root 上:
 rm /root/.chexian-data-password && curl -sL https://gh-proxy.com/https://raw.githubusercontent.com/alongor666/chexian-query/main/scripts/setup-https-share.sh | bash
 ```
 
-记得把 Win 的 `.env` 里 `HTTPS_PASS` 同步更新。
+记得改 Win 的 `.env` 里 `HTTPS_PASS` 同步更新。
 
 ---
 
@@ -235,29 +119,56 @@ rm /root/.chexian-data-password && curl -sL https://gh-proxy.com/https://raw.git
 
 ```
 chexian-query/
-├── AGENTS.md              # AI 行为指南(给 GLM 读)
-├── CLAUDE.md              # 同上,Claude 标准
-├── README.md              # 你正在看的
-├── .env.example           # 配置模板
-├── package.json           # Node 依赖
+├── AGENTS.md                       # AI 行为指南(给 GLM 读;Claude 等价)
+├── CLAUDE.md                       # 同上
+├── README.md                       # 本文件(数据负责人视角)
+├── .env.example                    # 配置模板
+├── package.json                    # Node 依赖,锁 Node 22
 ├── scripts/
-│   ├── setup.mjs              # 共享 VIEW 生成器(读 DATA_BASE)
-│   ├── query.mjs              # SQL 执行器
-│   ├── verify.mjs             # 数据自检
-│   ├── sync-https.mjs         # 中转机:从 VPS HTTPS 拉数据
-│   └── setup-https-share.sh   # VPS:开启 /data/ HTTPS 下载端点(VNC root 跑一次)
+│   ├── setup.mjs                   # 共享 VIEW 生成器(读 DATA_BASE)
+│   ├── query.mjs                   # SQL 执行器(含审计日志)
+│   ├── verify.mjs                  # 数据自检
+│   ├── sync-https.mjs              # 中转机:从 VPS HTTPS 拉数据
+│   ├── setup-https-share.sh        # VPS:开启 /data/ HTTPS 端点(VNC root 跑一次)
+│   └── package-for-colleagues.mjs  # 中转机:打包 zip 给同事(必须 Win)
+├── dist-template/                  # 打包时覆盖到同事版的内容
+│   ├── .env                        # 同事版 .env(只有 DATA_BASE)
+│   ├── update.bat                  # 同事版升级脚本
+│   └── README-colleague.md         # 同事版 README(打包时改名为 README.md)
 ├── docs/
-│   ├── schema.md          # 字段定义
-│   ├── business-rules.md  # 业务铁律
-│   ├── duckdb-cheatsheet.md  # DuckDB 方言
-│   └── examples/          # 5 条样板
-└── data/                  # (默认本地数据目录,SMB 模式不使用)
+│   ├── IT-onboarding.md            # 给 IT 的新人配置 SOP
+│   ├── schema.md                   # 字段定义
+│   ├── business-rules.md           # 业务铁律
+│   ├── duckdb-cheatsheet.md        # DuckDB 方言
+│   └── examples/                   # 5 条样板查询
+├── data/                           # 默认本地数据目录(可被 .env DATA_BASE 覆盖)
+├── logs/                           # 审计日志(自动创建,gitignore)
+└── dist/                           # package-for-colleagues.mjs 输出位置(gitignore)
 ```
+
+---
+
+## 文档导航
+
+- [CLAUDE.md](CLAUDE.md) / [AGENTS.md](AGENTS.md):AI 行为规范、12 条业务铁律、诊断纪律
+- [docs/business-rules.md](docs/business-rules.md):满期赔付率 / NCD / 出险率年化等口径
+- [docs/schema.md](docs/schema.md):字段定义
+- [docs/duckdb-cheatsheet.md](docs/duckdb-cheatsheet.md):DuckDB 方言
+- [docs/examples/](docs/examples/):5 个查询样板
+- [docs/IT-onboarding.md](docs/IT-onboarding.md):IT 配置同事电脑
+
+---
+
+## ⚠️ 数据保密
+
+数据未脱敏(车架号/车牌/被保险人性别等)。
+- 不要把含个人信息的查询结果导出/截图到非工作群
+- GLM-5.1 处理时数据会上传智谱服务器,**不要让 GLM 列原始客户清单**(已知合规隐患,见 CLAUDE.md §10)
 
 ---
 
 ## 联系
 
-- 数据更新 / SMB 凭据问题:找 [数据负责人]
-- AI 输出有疑问:把对话片段截图发到群,大家会帮你看
-- 项目本身的 bug / 想加新文档:GitHub issue 或发到群
+- 同事问题:看同事拿到的 zip 里的 `README.md`,或直接找你
+- IT 问题:[docs/IT-onboarding.md](docs/IT-onboarding.md)
+- 项目代码 / bug:[GitHub issue](https://github.com/alongor666/chexian-query/issues)

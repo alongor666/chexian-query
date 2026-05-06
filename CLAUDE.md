@@ -171,11 +171,23 @@ SELECT ...
 
 - **Win 中转机必有 V2RayN**,VMess 不代理 SSH 协议,所以 SSH 在这台机器上是死路。**不要再尝试**。
 - **VPS(162.14.113.44)是腾讯云大陆 IP**。V2RayN 在"绕过大陆"模式下会让它走直连,而直连被公司防火墙拦。所以这台 Win 必须 V2RayN GLOBAL 模式或者把 `chexian.cretvalu.com` 加自定义代理白名单。
-- **实际 git repo 嵌在 `chexian-query/chexian-query/`**(双层目录),不要假设外层就是 repo,先 `git status` 确认。
 - **GitHub remote 可能配的是 `ghfast.top` 镜像**(只读),push 必须先 `git remote set-url origin https://github.com/alongor666/chexian-query.git`。
 - **VPS deployer 用户的 NOPASSWD sudo 只限 `/usr/local/bin/deploy-chexian-api`**,nginx / iptables 等改动必须走 VNC root。
+- **同事环境**:Win + 公司内网 + 中国国内网 + **无 VPN** + 不会命令行。**所有同事侧的代码不能依赖外网**(GitHub/npm/nodejs.org 都不可达)。同事拿到的是数据负责人在 Win 中转机上打的 zip,直接解压用,零外网。
 
-### 10.4 接手 sync 类问题的强制起手式
+### 10.4 同事侧分发的零配置原则
+
+同事拿到的版本(`dist-template/` 的内容,被 `package-for-colleagues.mjs` 应用)必须满足:
+
+- **零外网**:不能依赖 git pull / npm install / 任何在线下载
+- **零命令行**:同事只能双击 `.bat`,不能要求他们打开 PowerShell
+- **零配置**:`.env` 由打包脚本预置好,同事不用改任何配置
+- **零编译**:`node_modules` 必须打包时就装好(意味着**打包必须在 Win 上做**,不能在 Mac 上打 — duckdb 是平台相关 native binary)
+- **凭据隔离**:打包时打的是 `dist-template/.env`(只有 `DATA_BASE`),**不能**把数据负责人的 `.env`(含 `HTTPS_PASS`)打进去
+
+任何对同事侧的改动都必须 review 是否破坏这 5 条。
+
+### 10.5 接手 sync 类问题的强制起手式
 
 ```
 1. 把用户的目标用一句话重写,不要继承前任的解法名词

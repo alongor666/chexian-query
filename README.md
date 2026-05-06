@@ -151,6 +151,70 @@ node scripts/verify.mjs
 
 ---
 
+## 数据负责人专属(同事可跳过)
+
+> 你是负责把 VPS 数据同步到内网共享盘的角色。本节不是同事看的。
+
+### 网络拓扑
+```
+Mac(你) ─── push ───▶ VPS ───── pull ─────▶ Win 中转机 ───── SMB ─────▶ 同事 N 人
+                                            10.120.0.87
+                                            \\10.120.0.87\chexian-query\data
+```
+
+### 在 Win 中转机上一次性配置
+1. 装 Node.js 22+ 和 OpenSSH 客户端(Win10/11 自带,设置 → 应用 → 可选功能 → 添加 OpenSSH 客户端)
+2. `git clone https://github.com/alongor666/chexian-query.git`
+3. `npm install`
+4. 生成 SSH key:`ssh-keygen -t ed25519`,把 `%USERPROFILE%\.ssh\id_ed25519.pub` 加到 VPS 的 `deployer@162.14.113.44:~/.ssh/authorized_keys`
+5. 测试 ssh:`ssh deployer@162.14.113.44 "echo OK"` 应输出 OK
+6. 创建本地共享文件夹,如 `D:\chexian-share\data`,右键属性 → 共享 → 共享给"Everyone(只读)"或建账号
+7. 复制 `.env.example` 为 `.env`,填:
+   ```
+   DATA_BASE=D:/chexian-share/data
+   VPS_HOST=162.14.113.44
+   VPS_USER=deployer
+   VPS_PORT=22
+   VPS_DATA_DIR=/var/www/chexian/server/data
+   ```
+
+### 日常同步(每天/每周一次)
+```powershell
+cd chexian-query
+node scripts/sync-from-vps.mjs
+```
+
+输出示例:
+```
+[sync] 远端文件: 20 个,合计 192.1 MB
+[sync] 待下载: 3 个文件,12.4 MB
+  [1/3] policy/current/01_签单清单_增量_20260505.parquet  ...OK
+  [2/3] claims/claims_2026.parquet                       ...OK
+  [3/3] dim/salesman/latest.parquet                      ...OK
+[sync] ✅ 同步完成: 3 成功 / 0 失败,用时 4.2s
+```
+
+### 进阶:开机自动同步(可选)
+
+Windows Task Scheduler 加一个任务,每天 8:00 自动跑:
+```
+程序: C:\Program Files\nodejs\node.exe
+参数: scripts/sync-from-vps.mjs
+起始位置: D:\chexian-query
+```
+
+### 常用命令
+
+| 命令 | 用途 |
+|---|---|
+| `node scripts/sync-from-vps.mjs --check` | 仅测试 SSH 连通性 |
+| `node scripts/sync-from-vps.mjs --dry-run` | 看待下载清单,不实际下载 |
+| `node scripts/sync-from-vps.mjs` | 增量同步(只下载新/改的) |
+| `node scripts/sync-from-vps.mjs --full` | 全量重下(忽略本地已有) |
+| `node scripts/verify.mjs` | 验证共享盘里的数据可读 |
+
+---
+
 ## 项目结构
 
 ```
@@ -163,7 +227,8 @@ chexian-query/
 ├── scripts/
 │   ├── setup.mjs          # 共享 VIEW 生成器(读 DATA_BASE)
 │   ├── query.mjs          # SQL 执行器
-│   └── verify.mjs         # 数据自检
+│   ├── verify.mjs         # 数据自检
+│   └── sync-from-vps.mjs  # VPS 增量同步(数据负责人专用)
 ├── docs/
 │   ├── schema.md          # 字段定义
 │   ├── business-rules.md  # 业务铁律

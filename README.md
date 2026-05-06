@@ -157,41 +157,48 @@ node scripts/verify.mjs
 
 ### 网络拓扑
 ```
-Mac(你) ─── push ───▶ VPS ───── pull ─────▶ Win 中转机 ───── SMB ─────▶ 同事 N 人
-                                            10.120.0.87
-                                            \\10.120.0.87\chexian-query\data
+Mac(你)  ─ ssh push ─▶  VPS  ─ HTTPS pull ─▶  Win 中转机  ─ SMB ─▶  同事 N 人
+                       chexian.cretvalu.com    10.120.0.87
+                       /data/(Basic Auth)     \\10.120.0.87\chexian-query\data
 ```
 
-### 在 Win 中转机上一次性配置
-1. 装 Node.js 22+ 和 OpenSSH 客户端(Win10/11 自带,设置 → 应用 → 可选功能 → 添加 OpenSSH 客户端)
-2. `git clone https://github.com/alongor666/chexian-query.git`
-3. `npm install`
-4. 生成 SSH key:`ssh-keygen -t ed25519`,把 `%USERPROFILE%\.ssh\id_ed25519.pub` 加到 VPS 的 `deployer@162.14.113.44:~/.ssh/authorized_keys`
-5. 测试 ssh:`ssh deployer@162.14.113.44 "echo OK"` 应输出 OK
-6. 创建本地共享文件夹,如 `D:\chexian-share\data`,右键属性 → 共享 → 共享给"Everyone(只读)"或建账号
-7. 复制 `.env.example` 为 `.env`,填:
-   ```
-   DATA_BASE=D:/chexian-share/data
-   VPS_HOST=162.14.113.44
-   VPS_USER=deployer
-   VPS_PORT=22
-   VPS_DATA_DIR=/var/www/chexian/server/data
-   ```
+> ⚠️ 为什么 Win → VPS 走 HTTPS 而不是 SSH:公司网络封外部 SSH 出站,V2RayN 这类商业代理只透传 HTTP/HTTPS,SSH 协议无法通过。HTTPS + nginx Basic Auth 是这种环境下的唯一可行方案。详见 [CLAUDE.md 第十章](CLAUDE.md)。
+
+### 一次性 VPS 端配置(VNC 控制台 root 跑一次)
+
+```bash
+curl -sL https://gh-proxy.com/https://raw.githubusercontent.com/alongor666/chexian-query/main/scripts/setup-https-share.sh | bash
+```
+
+会输出账号、密码,以及 Win 端 `.env` 要填的 3 行。密码也存在 VPS 的 `/root/.chexian-data-password`。
+
+脚本做的事:
+- 给 nginx 加一个 `/data/` location(指向 `/var/www/chexian/server/data/`)
+- 用 `openssl` 生成 Basic Auth 凭据,写入 `/etc/nginx/.chexian-data-htpasswd`
+- 备份原 nginx 配置到 `/etc/nginx/conf.d/chexian.conf.bak.<时间戳>` 后 reload
+
+### 一次性 Win 中转机配置
+
+1. 装 Node.js 22+:`winget install OpenJS.NodeJS.LTS`
+2. `git clone https://github.com/alongor666/chexian-query.git && cd chexian-query && npm install`
+3. 创建本地共享文件夹(如 `D:\chexian-share\data`),右键 → 共享 → 共享给"Everyone(只读)"
+4. 复制 `.env.example` 为 `.env`,填上 VPS 端脚本输出的 3 个 HTTPS_* 变量,以及 `DATA_BASE=D:/chexian-share/data`
+5. **V2RayN 必须配置**:让 `chexian.cretvalu.com` 走代理(GLOBAL 模式或自定义代理白名单),否则会因为是大陆 IP 走直连而被公司防火墙切断
 
 ### 日常同步(每天/每周一次)
 ```powershell
 cd chexian-query
-node scripts/sync-from-vps.mjs
+node scripts/sync-https.mjs
 ```
 
 输出示例:
 ```
-[sync] 远端文件: 20 个,合计 192.1 MB
-[sync] 待下载: 3 个文件,12.4 MB
-  [1/3] policy/current/01_签单清单_增量_20260505.parquet  ...OK
-  [2/3] claims/claims_2026.parquet                       ...OK
-  [3/3] dim/salesman/latest.parquet                      ...OK
-[sync] ✅ 同步完成: 3 成功 / 0 失败,用时 4.2s
+[sync] 远端: 20 个文件,合计 192.1 MB
+[sync] 待下载: 3 个,12.4 MB
+[1/3] policy/current/01_签单清单_增量_20260505.parquet  12.0 MB  NEW ... OK
+[2/3] claims/claims_2026.parquet                       320 KB    UPDATE ... OK
+[3/3] dim/salesman/latest.parquet                       28 KB    UPDATE ... OK
+[sync] ✅ 3 成功 / 0 失败,用时 8.2s
 ```
 
 ### 进阶:开机自动同步(可选)
@@ -199,19 +206,28 @@ node scripts/sync-from-vps.mjs
 Windows Task Scheduler 加一个任务,每天 8:00 自动跑:
 ```
 程序: C:\Program Files\nodejs\node.exe
-参数: scripts/sync-from-vps.mjs
-起始位置: D:\chexian-query
+参数: scripts/sync-https.mjs
+起始位置: D:\chexian-query\chexian-query
 ```
 
 ### 常用命令
 
 | 命令 | 用途 |
 |---|---|
-| `node scripts/sync-from-vps.mjs --check` | 仅测试 SSH 连通性 |
-| `node scripts/sync-from-vps.mjs --dry-run` | 看待下载清单,不实际下载 |
-| `node scripts/sync-from-vps.mjs` | 增量同步(只下载新/改的) |
-| `node scripts/sync-from-vps.mjs --full` | 全量重下(忽略本地已有) |
-| `node scripts/verify.mjs` | 验证共享盘里的数据可读 |
+| `node scripts/sync-https.mjs --check` | 仅测试 HTTPS 连通(账号/密码/代理是否正常) |
+| `node scripts/sync-https.mjs --dry-run` | 看待下载清单,不实际下载 |
+| `node scripts/sync-https.mjs` | 增量同步(只下载新/大小变了的) |
+| `node scripts/sync-https.mjs --full` | 全量重下(忽略本地已有) |
+| `node scripts/verify.mjs` | 验证本地 / 共享盘数据可读 |
+
+### 换密码 / 重新生成
+
+```bash
+# VNC root 上跑:
+rm /root/.chexian-data-password && curl -sL https://gh-proxy.com/https://raw.githubusercontent.com/alongor666/chexian-query/main/scripts/setup-https-share.sh | bash
+```
+
+记得把 Win 的 `.env` 里 `HTTPS_PASS` 同步更新。
 
 ---
 
@@ -225,10 +241,11 @@ chexian-query/
 ├── .env.example           # 配置模板
 ├── package.json           # Node 依赖
 ├── scripts/
-│   ├── setup.mjs          # 共享 VIEW 生成器(读 DATA_BASE)
-│   ├── query.mjs          # SQL 执行器
-│   ├── verify.mjs         # 数据自检
-│   └── sync-from-vps.mjs  # VPS 增量同步(数据负责人专用)
+│   ├── setup.mjs              # 共享 VIEW 生成器(读 DATA_BASE)
+│   ├── query.mjs              # SQL 执行器
+│   ├── verify.mjs             # 数据自检
+│   ├── sync-https.mjs         # 中转机:从 VPS HTTPS 拉数据
+│   └── setup-https-share.sh   # VPS:开启 /data/ HTTPS 下载端点(VNC root 跑一次)
 ├── docs/
 │   ├── schema.md          # 字段定义
 │   ├── business-rules.md  # 业务铁律

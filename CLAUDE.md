@@ -128,3 +128,71 @@ SELECT ...
 ## 九、数据时效
 
 数据每天/每周更新一次。每次会话开始如果用户问"截至今天",建议先跑 `node scripts/verify.mjs` 看签单日期 max,以此为"截至日期"。
+
+---
+
+## 十、数据同步与诊断纪律(给排查 sync 问题的 AI)
+
+> 这一章不是给"分析助手"角色用的,是给"被叫去修同步问题"的 AI 看的。
+> 写在这里是因为本项目曾经走过 4 小时的弯路,把它沉淀成规则避免下次再踩。
+
+### 10.1 架构选择规则(硬性)
+
+| 数据流终点 | 协议选择 |
+|---|---|
+| 开发者自己的可控机器(Mac/Linux 工作站) | SSH/SCP 可以 |
+| **企业内网终端 / 中转机 / 任何受控 IT 环境** | **必须 HTTPS,禁止用 SSH** |
+| 跨境、跨墙、跨 NAT 的对端 | HTTPS,辅以 V2Ray/代理 |
+
+**为什么**:企业网络的标准做法是封一切外部 SSH,只放行 80/443。商业代理(VMess/SS/Trojan)只透传 HTTP/HTTPS。在这种环境下试图调通 SSH 是与基础设施对着干,赢不了。
+
+**本项目的实现**:nginx + Basic Auth(`scripts/setup-https-share.sh`),客户端 `scripts/sync-https.mjs`。`sync-from-vps.mjs` 已废弃删除。
+
+### 10.2 诊断纪律(失败预算 + 信号阅读)
+
+**失败预算**:
+- 1 次失败:再试一次,可以
+- 2 次失败:停下,**画决策树给用户**,把剩余可能性列出来,让用户帮你裁
+- 3 次失败:**禁止再试同方向**,必须 pivot 换协议/换方案
+
+**信号阅读 — 看到这些就立刻换方向**:
+- 服务端日志**完全没**出现客户端 IP → 不是服务端问题,转向客户端/中间网络
+- TCP 通(`Test-NetConnection` True)+ 应用层断 + 多端口同症状 → 90% 是中间设备 RST 协议层
+- `ssh_exchange_identification: Connection closed by remote host` 在企业网下 → **几乎确定**是协议被中间盒切,不是 sshd 配置问题
+- 用户出现"总是这样"、"没有头绪"、"全权交给你"等情绪信号 → 立即 pivot,**禁止**再让用户复制粘贴
+
+**反模式**(我曾全踩,别再踩):
+- ❌ 客户端变量未知(用户机器跑着什么不清楚)就动服务端
+- ❌ 隧道视野(在原假设里挖更深而不是回到决策树根)
+- ❌ 沉没成本(已经写了脚本舍不得切方向)
+- ❌ 不对称验证(成功证据接受,失败证据归因为"还需要再试一个变量")
+
+### 10.3 本项目的硬环境约束(永远别问、别试)
+
+- **Win 中转机必有 V2RayN**,VMess 不代理 SSH 协议,所以 SSH 在这台机器上是死路。**不要再尝试**。
+- **VPS(162.14.113.44)是腾讯云大陆 IP**。V2RayN 在"绕过大陆"模式下会让它走直连,而直连被公司防火墙拦。所以这台 Win 必须 V2RayN GLOBAL 模式或者把 `chexian.cretvalu.com` 加自定义代理白名单。
+- **实际 git repo 嵌在 `chexian-query/chexian-query/`**(双层目录),不要假设外层就是 repo,先 `git status` 确认。
+- **GitHub remote 可能配的是 `ghfast.top` 镜像**(只读),push 必须先 `git remote set-url origin https://github.com/alongor666/chexian-query.git`。
+- **VPS deployer 用户的 NOPASSWD sudo 只限 `/usr/local/bin/deploy-chexian-api`**,nginx / iptables 等改动必须走 VNC root。
+
+### 10.4 接手 sync 类问题的强制起手式
+
+```
+1. 把用户的目标用一句话重写,不要继承前任的解法名词
+   ❌ "修 SSH"
+   ✅ "让 Win 拿到 VPS 上的 parquet"
+
+2. 列环境约束(30 秒,问用户即可):
+   - 客户端在哪个网络环境?
+   - 有 VPN/代理/EDR/企业防火墙吗?
+   - 同步多大、多频繁?
+
+3. 按 §10.1 选协议,选完不再改
+   选了 HTTPS 就走 nginx 路线,选了 SSH 就走 SCP 路线
+   不要混搭
+
+4. 验证连通性的最小成本路径
+   HTTPS → curl 一行
+   SSH → ssh -v 一行
+   失败立即按 §10.2 诊断纪律走
+```
